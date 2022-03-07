@@ -1,0 +1,8 @@
+{
+  "name": "daily-share-screen-chooser",
+  "description": "A daily share screen chooser",
+  "repository": "https://github.com/jpdejavite/daily-share-screen-chooser",
+  "logo": "https://cdn.rawgit.com/heroku/node-js-getting-started/main/public/node.svg",
+  "keywords": ["node", "express", "heroku"],
+  "image": "heroku/nodejs"
+}
