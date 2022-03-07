@@ -1,12 +1,91 @@
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
-const PORT = process.env.PORT || 3000;
+const { App, LogLevel } = require("@slack/bolt");
+const { threadId } = require('worker_threads');
+
+const port = process.env.PORT || 3000;
 const token = process.env.SLACK_TOKEN;
 const channelId = process.env.SLACK_CHANNEL_ID;
+const signingSecret = process.env.SLACK_SIGNING_SECRET;
+const messageTag = process.env.SLACK_MESSAGE_TAG;
+const messagePickText = process.env.SLACK_MESSAGE_PICK_TEXT;
 
-// Require the Bolt for JavaScript package (github.com/slackapi/bolt)
-const { App, LogLevel } = require("@slack/bolt");
+const EVENT_TYPE_MESSAGE = 'message';
+
+const app = new App({
+  token,
+  signingSecret,
+  // LogLevel can be imported and used to make debugging simpler
+  logLevel: LogLevel.DEBUG
+});
+
+
+const processEvent = async (event) => {
+  if (EVENT_TYPE_MESSAGE !== event.type) {
+    console.log('event is not interesting');
+    return
+  }
+
+  if (channelId !== event.channel) {
+    console.log('a message was sent to channel i am not interested');
+    return
+  }
+
+  const lastPick = await findLastDailyShareScreenPick();
+  await sendMessageToSlack(event, lastPick);
+};
+
+const findLastDailyShareScreenPick = async () => {
+  try {
+    const result = await app.client.conversations.history({
+      channel: channelId,
+      token
+    });
+    if (!result.messages) {
+      return;
+    }
+    for (var i = 0; i < result.messages.length; i++) {
+      const message = result.messages[i];
+      if (message.text.includes(messageTag)) {
+        const replies = await app.client.conversations.replies({
+          channel: channelId,
+          ts: message.ts,
+        });
+
+        if (replies.messages) {
+          for (var j = 0; j < replies.messages.length; j++) {
+            const reply = replies.messages[j];
+
+            if (reply.text.includes(messagePickText)) {
+              return reply.text.replace(messagePickText, '');
+            }
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const sendMessageToSlack = async (event, lastPick) => {
+  if (!event.text.includes(messageTag)) {
+    return;
+  }
+  try {
+    await app.client.chat.postMessage({
+      token,
+      channel: channelId,
+      text: 'Hello World ' + lastPick,
+      thread_ts: event.event_ts,
+    });
+
+  } catch (error) {
+    console.error(error);
+  }
+};
 
 express()
   .use(bodyParser.json())
@@ -24,46 +103,11 @@ express()
       return res.status(200).send(req.body.challenge);
     }
 
-    if (req.body.type === 'message') {
-
-      // {
-      //   "type": "message",
-      //   "channel": "C2147483705",
-      //   "user": "U2147483697",
-      //   "text": "Hello world",
-      //   "ts": "1355517523.000005"
-      // }
-      console.log('message:' + req.body);
+    if (req.body.event) {
+      console.log('an event was sent');
+      await processEvent(req.body.event);
     }
-    console.log(req.body);
 
     return res.status(200).send({});
-
-    // const app = new App({
-    //   token,
-    //   signingSecret: "52aff634a2c57d88be21f462743dcd77",
-    //   // LogLevel can be imported and used to make debugging simpler
-    //   logLevel: LogLevel.DEBUG
-    // });
-
-
-    // try {
-    //   // // Call the chat.postMessage method using the built-in WebClient
-    //   const result = await app.client.chat.postMessage({
-    //     // The token you used to initialize your app
-    //     token,
-    //     channel: channelId,
-    //     text: 'Hello World'
-    //     // You could also use a blocks[] array to send richer content
-    //   });
-
-    //   // Print result, which includes information about the message (like TS)
-    //   console.log(result);
-    // }
-    // catch (error) {
-    //   console.error(error);
-    // }
-
-    // return res.status(200).send({});
   })
-  .listen(PORT, () => console.log(`Listening on ${PORT}`));
+  .listen(port, () => console.log(`Listening on ${port}`));
