@@ -1,7 +1,10 @@
-const express = require('express')
-const path = require('path')
-const bodyParser = require('body-parser')
-const PORT = process.env.PORT || 3000
+const express = require('express');
+const path = require('path');
+const bodyParser = require('body-parser');
+const PORT = process.env.PORT || 3000;
+const token = process.env.SLACK_TOKEN;
+const channelId = process.env.SLACK_CHANNEL_ID;
+
 // Require the Bolt for JavaScript package (github.com/slackapi/bolt)
 const { App, LogLevel } = require("@slack/bolt");
 
@@ -30,12 +33,12 @@ express()
       //   "text": "Hello world",
       //   "ts": "1355517523.000005"
       // }
-      console.log(req.body);
+      console.log('message:' + req.body);
     }
+    console.log(req.body);
 
     return res.status(200).send({});
 
-    // const token = 'xoxb-399131229937-2458808280577-lPT31ezH9VuVCWOS8aBZJfF4';
     // const app = new App({
     //   token,
     //   signingSecret: "52aff634a2c57d88be21f462743dcd77",
@@ -43,8 +46,6 @@ express()
     //   logLevel: LogLevel.DEBUG
     // });
 
-    // // ID of the channel you want to send the message to
-    // const channelId = "C035TSC55RU";
 
     // try {
     //   // // Call the chat.postMessage method using the built-in WebClient
