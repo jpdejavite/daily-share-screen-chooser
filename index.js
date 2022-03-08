@@ -102,7 +102,7 @@ const sendMessageToSlack = async (event, lastPick) => {
 
 express()
   .use(bodyParser.json())
-  .get('/', (req, res) => res.render('pages/index'))
+  .get('/', (req, res) => res.status(200).send('Nothing here lol!!!'))
   .post('/profile', (req, res, next) => {
     console.log(req.body)
     res.json(req.body)
