@@ -1,8 +1,7 @@
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
-const { App, LogLevel } = require("@slack/bolt");
-const { threadId } = require('worker_threads');
+const { App, LogLevel } = require('@slack/bolt');
 
 const port = process.env.PORT || 3000;
 const token = process.env.SLACK_TOKEN;
@@ -10,13 +9,13 @@ const channelId = process.env.SLACK_CHANNEL_ID;
 const signingSecret = process.env.SLACK_SIGNING_SECRET;
 const messageTag = process.env.SLACK_MESSAGE_TAG;
 const messagePickText = process.env.SLACK_MESSAGE_PICK_TEXT;
+const slackUserList = process.env.SLACK_USER_LIST.split(',');
 
 const EVENT_TYPE_MESSAGE = 'message';
 
 const app = new App({
   token,
   signingSecret,
-  // LogLevel can be imported and used to make debugging simpler
   logLevel: LogLevel.DEBUG
 });
 
@@ -32,8 +31,25 @@ const processEvent = async (event) => {
     return
   }
 
+  if (!event.text.includes(messageTag)) {
+    return;
+  }
+
   const lastPick = await findLastDailyShareScreenPick();
-  await sendMessageToSlack(event, lastPick);
+  await sendMessageToSlack(event, findNextDailyShareScreenPick(lastPick));
+};
+
+const findNextDailyShareScreenPick = (lastPick) => {
+  if (!lastPick) {
+    return slackUserList[0];
+  }
+  for (let i = 0; i < slackUserList.length; i++) {
+    const slackUser = slackUserList[i];
+    if (slackUser === lastPick) {
+      return (i + 1 >= slackUserList.length) ? slackUserList[0] : slackUserList[i + 1];
+    }
+  }
+  return slackUserList[0];
 };
 
 const findLastDailyShareScreenPick = async () => {
@@ -45,7 +61,7 @@ const findLastDailyShareScreenPick = async () => {
     if (!result.messages) {
       return;
     }
-    for (var i = 0; i < result.messages.length; i++) {
+    for (let i = 0; i < result.messages.length; i++) {
       const message = result.messages[i];
       if (message.text.includes(messageTag)) {
         const replies = await app.client.conversations.replies({
@@ -54,11 +70,11 @@ const findLastDailyShareScreenPick = async () => {
         });
 
         if (replies.messages) {
-          for (var j = 0; j < replies.messages.length; j++) {
+          for (let j = 0; j < replies.messages.length; j++) {
             const reply = replies.messages[j];
 
             if (reply.text.includes(messagePickText)) {
-              return reply.text.replace(messagePickText, '');
+              return reply.text.replace(messagePickText, '').trim();
             }
           }
         }
@@ -71,14 +87,11 @@ const findLastDailyShareScreenPick = async () => {
 };
 
 const sendMessageToSlack = async (event, lastPick) => {
-  if (!event.text.includes(messageTag)) {
-    return;
-  }
   try {
     await app.client.chat.postMessage({
       token,
       channel: channelId,
-      text: 'Hello World ' + lastPick,
+      text: `${messagePickText} ${lastPick}`,
       thread_ts: event.event_ts,
     });
 
