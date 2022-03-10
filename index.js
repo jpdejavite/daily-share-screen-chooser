@@ -94,7 +94,6 @@ const sendMessageToSlack = async (event, lastPick) => {
       text: `${messagePickText} ${lastPick}`,
       thread_ts: event.event_ts,
     });
-
   } catch (error) {
     console.error(error);
   }
@@ -102,11 +101,10 @@ const sendMessageToSlack = async (event, lastPick) => {
 
 express()
   .use(bodyParser.json())
+  .use(express.static(path.join(__dirname, 'public')))
+  .set('views', path.join(__dirname, 'views'))
+  .set('view engine', 'ejs')
   .get('/', (req, res) => res.status(200).send('Nothing here lol!!!'))
-  .post('/profile', (req, res, next) => {
-    console.log(req.body)
-    res.json(req.body)
-  })
   .post('/slack/message-sent', async (req, res) => {
     if (!req || !req.body) {
       return res.status(200).send({});
