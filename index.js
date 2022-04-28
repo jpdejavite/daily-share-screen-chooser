@@ -1,4 +1,5 @@
 const express = require('express');
+const { Mutex } = require('async-mutex');
 const path = require('path');
 const bodyParser = require('body-parser');
 const { App, LogLevel } = require('@slack/bolt');
@@ -12,6 +13,7 @@ const messagePickText = process.env.SLACK_MESSAGE_PICK_TEXT;
 const slackUserList = process.env.SLACK_USER_LIST.split(',');
 
 const EVENT_TYPE_MESSAGE = 'message';
+const mutex = new Mutex();
 
 const app = new App({
   token,
@@ -35,7 +37,12 @@ const processEvent = async (event) => {
     return;
   }
 
-  const lastPick = await findLastDailyShareScreenPick();
+  const { lastPick, lastPickTs } = await findLastDailyShareScreenPick();
+  if (lastPickTs === event.event_ts) {
+    console.log('a message was already sent to channel');
+    return;
+  }
+
   await sendMessageToSlack(event, findNextDailyShareScreenPick(lastPick));
 };
 
@@ -59,7 +66,7 @@ const findLastDailyShareScreenPick = async () => {
       token
     });
     if (!result.messages) {
-      return;
+      return {};
     }
     for (let i = 0; i < result.messages.length; i++) {
       const message = result.messages[i];
@@ -74,7 +81,10 @@ const findLastDailyShareScreenPick = async () => {
             const reply = replies.messages[j];
 
             if (reply.text.includes(messagePickText)) {
-              return reply.text.replace(messagePickText, '').trim();
+              return {
+                lastPick: reply.text.replace(messagePickText, '').trim(),
+                lastPickTs: message.ts,
+              };
             }
           }
         }
@@ -83,6 +93,7 @@ const findLastDailyShareScreenPick = async () => {
 
   } catch (error) {
     console.error(error);
+    return {};
   }
 };
 
@@ -115,8 +126,11 @@ express()
     }
 
     if (req.body.event) {
-      console.log('an event was sent');
-      await processEvent(req.body.event);
+      console.log('processing event');
+      await mutex.runExclusive(async () => {
+        await processEvent(req.body.event);
+      });
+      console.log('event processed');
     }
 
     return res.status(200).send({});
